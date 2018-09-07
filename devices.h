@@ -3,6 +3,7 @@
 
 #include "dev_speed.h"
 #include "dev_screen.h"
+#include "dev_pir.h"
 
 int devices_create(void);
 void devices_destroy(void);

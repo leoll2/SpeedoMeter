@@ -2,21 +2,26 @@
 
 int devices_create(void)
 {   
-    int ret;
+    	int ret;
     
-    ret = dev_speed_create();
-    if (ret)
-        return ret;
+    	ret = dev_speed_create();
+    	if (ret)
+    		return ret;
     
-    ret = dev_screen_create(dev_speed_get_ptr()->this_device);
-    if (ret)
-        return ret;
-    
-    return 0;
+	ret = dev_screen_create(dev_speed_get_ptr()->this_device);
+	if (ret)
+    		return ret;
+
+	ret = dev_pir_create(dev_speed_get_ptr()->this_device);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 void devices_destroy(void)
 {
-    dev_screen_destroy();
-    dev_speed_destroy();
+	dev_pir_destroy();
+	dev_screen_destroy();
+	dev_speed_destroy();
 }
