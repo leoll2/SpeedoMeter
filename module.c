@@ -3,7 +3,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 
-#include "devices.h"
+#include "dev_speed.h"
 
 MODULE_AUTHOR("Leonardo Lai");
 MODULE_DESCRIPTION("Measure speed of a moving object");
@@ -15,9 +15,9 @@ static int __init speed_module_init(void)
 {
     int res;
     
-    res = devices_create();
+    res = dev_speed_create();
     if (res < 0) {
-        printk(KERN_ERR "Failed to create the devices.\n");
+        printk(KERN_ERR "Failed to create the speed device.\n");
         return res;
     }
     printk("Speed module loaded\n");
@@ -26,7 +26,7 @@ static int __init speed_module_init(void)
 
 static void __exit speed_module_exit(void)
 {
-    devices_destroy();
+    dev_speed_destroy();
     printk("Speed module unloaded\n");
 }
 
