@@ -1,4 +1,7 @@
+#include <linux/interrupt.h>
 #include <linux/kthread.h>
+#include <linux/mutex.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h>  // for copy_to_user
 
 #include "dev_speed.h"
@@ -7,6 +10,10 @@
 
 static struct miscdevice speed_device;  //forward declaration
 static struct task_struct *speed_sampling_thread_desc;
+static char *username;
+static int username_len;
+static struct mutex username_mutex;
+static struct mutex dev_speed_mutex;
 
 static int pippo = 3;
 
@@ -54,12 +61,57 @@ static int speed_close(struct inode *inode, struct file *file)
     return 0;
 }
 
-ssize_t speed_read(struct file *file, char __user *p, size_t len, loff_t *ppos)
+static ssize_t speed_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
 {
-    copy_to_user(p, "gatto\n", 6);
-    return 6;
+	int err, read_bytes;
+	mutex_lock(&username_mutex);
+	if (username == NULL) {
+		mutex_unlock(&username_mutex);
+		return 0;
+	}
+	if (len > username_len)
+		read_bytes = username_len;
+	else
+		read_bytes = len;
+	err = copy_to_user(buf, username, read_bytes);
+	if (err) {
+		mutex_unlock(&username_mutex);
+		return -EFAULT;
+	}
+	mutex_unlock(&username_mutex);
+	return read_bytes;
 }
 
+
+static ssize_t speed_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos) {
+	int err;
+	if (mutex_trylock(&dev_speed_mutex)) {
+		// Store the username
+		mutex_lock(&username_mutex);
+		if (username) {
+			mutex_unlock(&username_mutex);
+			return -1;
+		}
+		username = kmalloc(count, GFP_USER);
+		if (username == NULL) {
+			mutex_unlock(&username_mutex);
+			return -1;
+		}
+		username_len = count;
+		
+		err = copy_from_user(username, buf, count);
+		if (err) {
+			mutex_unlock(&username_mutex);
+			return -EFAULT;
+		}
+		mutex_unlock(&username_mutex);
+		// Enable IRQ from PIR1 and PIR2
+		//enable_irq(irq_pir1);
+		//enable_irq(irq_pir2);
+		return count;
+	}
+	return -1;
+}
 
 int dev_speed_create(void) {
     	int ret;
@@ -90,6 +142,9 @@ int dev_speed_create(void) {
 	if (ret)
 		return ret;
 
+	mutex_init(&username_mutex);
+	mutex_init(&dev_speed_mutex);
+
 	speed_sampling_thread_desc = kthread_run(speed_sampling_thread, NULL, "speed sampling thread");
 	if (IS_ERR(speed_sampling_thread_desc)) {
 		printk(KERN_WARNING "Failed to initialize the thread to handle the speed sampling.\n");
@@ -115,10 +170,11 @@ struct miscdevice* dev_speed_get_ptr(void) {
 }
 
 static struct file_operations speed_fops = {
-   	.owner =        THIS_MODULE,
-    	.read =         speed_read,
-    	.open =         speed_open,
-    	.release =      speed_close,
+   	.owner =      	THIS_MODULE,
+    	.read =         	speed_read,
+	.write =		speed_write,
+    	.open =         	speed_open,
+    	.release =      	speed_close,
 };
 
 static struct miscdevice speed_device = {

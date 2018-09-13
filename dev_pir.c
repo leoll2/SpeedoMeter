@@ -8,10 +8,13 @@
 #include "dev_pir.h"
 
 #define PIN_PIR1	15 	// PIR1
-#define PIN_PIR2 18	// PIR2
+#define PIN_PIR2	18	// PIR2
 
 struct completion sample_available;
 struct completion sample_consumed;
+
+unsigned int irq_pir1,
+		       irq_pir2;
 
 static struct gpio pir_gpios[] = {
 	{ PIN_PIR1, GPIOF_IN, "PIR 1" },
@@ -40,14 +43,14 @@ static ssize_t pir_read(struct file *file, char __user *p, size_t len, loff_t *p
 static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs *regs) {
 	struct miscdevice *pdev = (struct miscdevice *)dev;
 	if (pdev == &pir1_device) {
-		printk(KERN_DEBUG "Interrupt received from PIR1");
+		printk(KERN_DEBUG "Interrupt received from PIR1\n");
 		/*msleep(5000);
 		printk(KERN_DEBUG "Slept for 5 seconds after interrupt from PIR1");*/
 	}
 	else if (pdev == &pir2_device)
-		printk(KERN_DEBUG "Interrupt received from PIR2");
+		printk(KERN_DEBUG "Interrupt received from PIR2\n");
 	else {
-		printk(KERN_WARNING "Interrupt received from unknown PIR device!");
+		printk(KERN_WARNING "Interrupt received from unknown PIR device!\n");
 		return (irq_handler_t) IRQ_NONE;
 	}
 	return (irq_handler_t) IRQ_HANDLED;
@@ -75,10 +78,14 @@ int dev_pir_create(struct device *parent) {
 		return ret;
 	}
 
-	gpio_set_debounce(pir_gpios[0].gpio, 1000);	// FOR BUTTON ONLY!!!
+	// gpio_set_debounce(pir_gpios[0].gpio, 1000);	// FOR BUTTON ONLY!!!
+	// gpio_set_debounce(pir_gpios[1].gpio, 1000);	// FOR BUTTON ONLY!!!
+
+	irq_pir1 = gpio_to_irq(pir_gpios[0].gpio);
+	irq_pir2 = gpio_to_irq(pir_gpios[1].gpio);
 
 	// Request IRQ line
-	if (request_irq(gpio_to_irq(pir_gpios[0].gpio), 
+	if (request_irq(irq_pir1, 
 				(irq_handler_t) pir_irq_handler,
 				IRQF_TRIGGER_RISING, 
 				"pir_gpio_handler", 
@@ -86,7 +93,7 @@ int dev_pir_create(struct device *parent) {
 		printk(KERN_ERR "GPIO PIR1: cannot register IRQ\n");
 		return -EIO;
 	}
-	if (request_irq(gpio_to_irq(pir_gpios[1].gpio), 
+	if (request_irq(irq_pir2, 
 				(irq_handler_t) pir_irq_handler,
 				IRQF_TRIGGER_RISING, 
 				"pir_gpio_handler", 
@@ -94,13 +101,9 @@ int dev_pir_create(struct device *parent) {
 		printk(KERN_ERR "GPIO PIR2: cannot register IRQ\n");
 		return -EIO;
 	}
-	/*
-	ret = request_irq(gpio_to_irq(pir_gpios[1].gpio), (irq_handler_t) pir_irq_handler,
-				     IRQF_TRIGGER_RISING, "pir_gpio_handler", (void *)&pir2_device);
-	if (ret) {
-		printk(KERN_WARNING "Failed to request interrupt line for GPIO PIR2.\n");
-		return ret;
-	}*/
+	
+	//disable_irq(irq_pir1);	//DEBUG
+	//disable_irq(irq_pir2);	//DEBUG
 
 	init_completion(&sample_available);
 	init_completion(&sample_consumed);
@@ -111,8 +114,8 @@ int dev_pir_create(struct device *parent) {
 
 void dev_pir_destroy(void) {
 	// Release the interrupt line
-	free_irq(gpio_to_irq(pir_gpios[0].gpio), (void *)&pir1_device);
-	free_irq(gpio_to_irq(pir_gpios[1].gpio), (void *)&pir2_device);
+	free_irq(irq_pir1, (void *)&pir1_device);
+	free_irq(irq_pir2, (void *)&pir2_device);
 
 	// Free the GPIO pins    
 	gpio_free_array(pir_gpios, ARRAY_SIZE(pir_gpios));
