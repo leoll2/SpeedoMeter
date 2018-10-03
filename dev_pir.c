@@ -1,4 +1,3 @@
-#include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
@@ -10,6 +9,8 @@
 #define PIN_PIR1	15 	// PIR1
 #define PIN_PIR2	18	// PIR2
 
+struct timespec t1,
+			     t2;
 struct completion sample_available;
 struct completion sample_consumed;
 
@@ -44,11 +45,19 @@ static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs
 	struct miscdevice *pdev = (struct miscdevice *)dev;
 	if (pdev == &pir1_device) {
 		printk(KERN_DEBUG "Interrupt received from PIR1\n");
-		/*msleep(5000);
-		printk(KERN_DEBUG "Slept for 5 seconds after interrupt from PIR1");*/
+		if (t1.tv_sec == 0) {
+			getnstimeofday(&t1);
+			printk(KERN_DEBUG "PIR1 time: %ld.%ld\n", t1.tv_sec, t1.tv_nsec);
+		}
 	}
-	else if (pdev == &pir2_device)
+	else if (pdev == &pir2_device) {
 		printk(KERN_DEBUG "Interrupt received from PIR2\n");
+		if (t1.tv_sec != 0 && t2.tv_sec == 0) {
+			getnstimeofday(&t2);
+			printk(KERN_DEBUG "PIR2 seconds: %ld.%ld\n", t2.tv_sec, t2.tv_nsec);
+			complete(&sample_available);
+		}
+	}
 	else {
 		printk(KERN_WARNING "Interrupt received from unknown PIR device!\n");
 		return (irq_handler_t) IRQ_NONE;
@@ -58,6 +67,8 @@ static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs
 
 int dev_pir_create(struct device *parent) {
 	int ret;    
+	
+	t1.tv_sec = t2.tv_sec = 0;
 		
 	// Register the first PIR device
 	pir1_device.parent = parent;
@@ -102,8 +113,8 @@ int dev_pir_create(struct device *parent) {
 		return -EIO;
 	}
 	
-	//disable_irq(irq_pir1);	//DEBUG
-	//disable_irq(irq_pir2);	//DEBUG
+	disable_irq(irq_pir1);	// Start with interrupts disabled
+	disable_irq(irq_pir2);
 
 	init_completion(&sample_available);
 	init_completion(&sample_consumed);

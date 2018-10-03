@@ -1,19 +1,23 @@
 #include <linux/interrupt.h>
 #include <linux/kthread.h>
+#include <linux/ktime.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>  // for copy_to_user
+#include <linux/wait.h>
 
 #include "dev_speed.h"
 #include "dev_screen.h"
 #include "dev_pir.h"
+#include "dev_ranking.h"
 
-static struct miscdevice speed_device;  //forward declaration
+static struct miscdevice speed_device;
 static struct task_struct *speed_sampling_thread_desc;
 static char *username;
 static int username_len;
 static struct mutex username_mutex;
 static struct mutex dev_speed_mutex;
+unsigned int pir_dist;
 
 static int pippo = 3;
 
@@ -39,15 +43,39 @@ static struct attribute_group attr_group = {
 };
 
 static int speed_sampling_thread(void *arg) {
-
-	// COMPLETE VEL CONSUMATA
+	long delta_dsec;
+	unsigned int vel;
 	while(!kthread_should_stop()) {
-		// WAIT VEL DISPONIBILE
-		// ELABORA
-		// COMPLETE VEL CONSUMATA
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(HZ);
+		while(true) {
+			int ret;
+			wait_for_completion(&sample_available);
+			disable_irq(irq_pir1);
+			disable_irq(irq_pir2);
+			if (t1.tv_sec == 0 || t2.tv_sec == 0)	// if missing data, the thread was woken up by the closing function
+				break;
+				
+			// Process the data coming from sensors
+			delta_dsec = 10 * (t2.tv_sec - t1.tv_sec) + (t2.tv_nsec / 100000000) - (t1.tv_nsec / 100000000);
+			vel = pir_dist / delta_dsec;	// decimeters / deciseconds
+			printk(KERN_DEBUG "Delta deciseconds: %ld\n", delta_dsec);
+			printk(KERN_DEBUG "Velocita calcolata: %d\n", vel);
+			display_number(delta_dsec, 5000);
+			ret = add_user_to_ranking(username, delta_dsec, vel);
+			if (ret)
+				printk(KERN_WARNING "Failed to add user to the ranking\n");
+			else
+				printk(KERN_DEBUG "Added user to the ranking!\n");
+
+			t1.tv_sec = 0;
+			t2.tv_sec = 0;
+			kfree(username);
+			username = NULL;
+			mutex_unlock(&dev_speed_mutex);
+		}
 	}
+	enable_irq(irq_pir1);	// reenable IRQs as at the beginning
+	enable_irq(irq_pir2);
+	printk(KERN_DEBUG "Closing speed sampling thread\n");
 	return 0;
 }
 
@@ -106,16 +134,18 @@ static ssize_t speed_write(struct file *file, const char __user *buf, size_t cou
 		}
 		mutex_unlock(&username_mutex);
 		// Enable IRQ from PIR1 and PIR2
-		//enable_irq(irq_pir1);
-		//enable_irq(irq_pir2);
+		enable_irq(irq_pir1);
+		enable_irq(irq_pir2);
 		return count;
 	}
 	return -1;
 }
 
-int dev_speed_create(void) {
+int dev_speed_create(unsigned int sensors_dist) {
     	int ret;
     	struct kobject *kobj;
+    	
+    	pir_dist = sensors_dist;
     
     	ret = misc_register(&speed_device);
     	if (ret)
@@ -141,6 +171,9 @@ int dev_speed_create(void) {
 	ret = dev_pir_create(speed_device.this_device);
 	if (ret)
 		return ret;
+	ret = dev_ranking_create(speed_device.this_device);
+	if (ret)
+		return ret;
 
 	mutex_init(&username_mutex);
 	mutex_init(&dev_speed_mutex);
@@ -157,7 +190,9 @@ int dev_speed_create(void) {
 }
 
 void dev_speed_destroy(void) {
+	complete(&sample_available);	// if the thread was waiting for a sample, wake up it
 	kthread_stop(speed_sampling_thread_desc);
+	dev_ranking_destroy();
 	dev_pir_destroy();
 	dev_screen_destroy();
 	sysfs_remove_link(kernel_kobj, "speed");

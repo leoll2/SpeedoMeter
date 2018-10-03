@@ -6,6 +6,9 @@
 
 #include "dev_screen.h"
 
+#define MIN_REFRESH_DELAY		500
+#define MAX_REFRESH_DELAY	600
+
 #define PIN_A	21	// segment A
 #define PIN_B	20	// segment B
 #define PIN_C	16	// segment C
@@ -131,10 +134,11 @@ static int display_digit(unsigned int digit, unsigned int value) {
 	return 0;
 }
 
-static int display_number(unsigned int value) {
+int display_number(unsigned int value, unsigned int msecs) {
 	unsigned int t;
 	unsigned int digit_pos = 0;
 	unsigned int digits[4];
+	const unsigned int refresh_loops = 1000 * msecs / MIN_REFRESH_DELAY;
 
 	if (value > 9999)
 		return 1;
@@ -146,10 +150,10 @@ static int display_number(unsigned int value) {
 
 	stop_idle_screen_thread();
 
-	for (t = 0; t < 3000; ++t) {
+	for (t = 0; t < refresh_loops; ++t) {
 		display_digit(digit_pos, digits[digit_pos]);
 		digit_pos = (digit_pos + 1) % 4;		
-		usleep_range(400, 500);
+		usleep_range(MIN_REFRESH_DELAY, MAX_REFRESH_DELAY);
 	}
 
 	start_idle_screen_thread();
@@ -174,7 +178,7 @@ static ssize_t screen_read(struct file *file, char __user *p, size_t len, loff_t
 
 static ssize_t screen_write(struct file *file, const char __user *p, size_t len, loff_t *ppos)
 {
-	display_number(1234);
+	display_number(1234, 2000);
 	//display_digit(0, 5);
 	return 1;
 }

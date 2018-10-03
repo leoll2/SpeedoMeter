@@ -4,7 +4,7 @@ RPI_KERNEL_DIR ?= /lib/modules/`uname -r`/build/
 
 
 obj-m = speed.o
-speed-objs = module.o dev_speed.o dev_screen.o dev_pir.o
+speed-objs = module.o dev_speed.o dev_screen.o dev_pir.o dev_ranking.o
 
 default:
 	echo "Please specify if you run on Raspberry (rpi) or virtual machine (vm)"
