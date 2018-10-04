@@ -21,19 +21,20 @@ unsigned int pir_dist;
 
 static int pippo = 3;
 
-static ssize_t pippo_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
-    return sprintf(buf, "%d\n", pippo);
+static ssize_t rank_attr_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	debug_print_ranking();
+	return sprintf(buf, "Check DMESG\n");
 }
 
-static ssize_t pippo_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
-    sscanf(buf, "%du", &pippo);
-    return count;
+static ssize_t rank_attr_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	sscanf(buf, "%du", &pippo);
+	return count;
 }
 
-static struct kobj_attribute pippo_attr = __ATTR(pippo, 0664, pippo_show, pippo_store);
+static struct kobj_attribute rank_attr = __ATTR(my_ranking, 0664, rank_attr_show, rank_attr_store);
 
 static struct attribute *prova_attrs[] = {
-      &pippo_attr.attr,
+      &rank_attr.attr,
       NULL,
 };
 
@@ -63,8 +64,6 @@ static int speed_sampling_thread(void *arg) {
 			ret = add_user_to_ranking(username, delta_dsec, vel);
 			if (ret)
 				printk(KERN_WARNING "Failed to add user to the ranking\n");
-			else
-				printk(KERN_DEBUG "Added user to the ranking!\n");
 
 			t1.tv_sec = 0;
 			t2.tv_sec = 0;
