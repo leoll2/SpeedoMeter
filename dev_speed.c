@@ -19,19 +19,19 @@ static struct mutex username_mutex;
 static struct mutex dev_speed_mutex;
 unsigned int pir_dist;
 
-static int pippo = 3;
-
-static ssize_t rank_attr_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
-	debug_print_ranking();
-	return sprintf(buf, "Check DMESG\n");
+static ssize_t full_ranking_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	//debug_print_ranking();	//TO BE REMOVED
+	int ret;
+	char *ranking_str;
+	ret = get_ranking_str(&ranking_str);
+	if (ret <= 0)
+		return ret;
+	strcpy(buf, ranking_str);
+	kfree(ranking_str);
+	return ret;
 }
 
-static ssize_t rank_attr_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
-	sscanf(buf, "%du", &pippo);
-	return count;
-}
-
-static struct kobj_attribute rank_attr = __ATTR(my_ranking, 0664, rank_attr_show, rank_attr_store);
+static struct kobj_attribute rank_attr = __ATTR_RO(full_ranking);
 
 static struct attribute *prova_attrs[] = {
       &rank_attr.attr,
@@ -61,7 +61,7 @@ static int speed_sampling_thread(void *arg) {
 			printk(KERN_DEBUG "Delta deciseconds: %ld\n", delta_dsec);
 			printk(KERN_DEBUG "Velocita calcolata: %d\n", vel);
 			display_number(delta_dsec, 5000);
-			ret = add_user_to_ranking(username, delta_dsec, vel);
+			ret = ranking_store_time(username, delta_dsec, vel);
 			if (ret)
 				printk(KERN_WARNING "Failed to add user to the ranking\n");
 
@@ -131,6 +131,7 @@ static ssize_t speed_write(struct file *file, const char __user *buf, size_t cou
 			mutex_unlock(&username_mutex);
 			return -EFAULT;
 		}
+		username[count-1] = '\0';	// replace \n with \0
 		mutex_unlock(&username_mutex);
 		// Enable IRQ from PIR1 and PIR2
 		enable_irq(irq_pir1);

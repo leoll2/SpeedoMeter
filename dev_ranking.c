@@ -41,17 +41,66 @@ struct list_head *find_pos_to_insert(unsigned int time) {
 		}
 	}
 	return ranking_head.prev;
-} 
+}
 
-int add_user_to_ranking(char *name, unsigned int time, unsigned int vel) {
-	struct list_head *pos;
+int add_new_user(char *name, unsigned int time, unsigned int vel) {
 	struct user *new_user = kmalloc(sizeof(struct user), GFP_KERNEL);
 	if (!new_user)
 		return -1;
 	strncpy(new_user->name, name, 31);
 	new_user->best_time = time;
+	new_user->best_vel = vel;
 	list_add(&new_user->ul, find_pos_to_insert(time));
 	return 0;
+}
+
+int update_user(char *name, unsigned int time, unsigned int vel)  {
+	struct user *u, *next;
+	list_for_each_entry_safe(u, next, &ranking_head, ul) {
+		if (!strncmp(name, u->name, 32)) {
+			if (time < u->best_time) {
+				u->best_time = time;
+				u->best_vel = vel;
+				//Reposition
+				list_del(&u->ul);
+				list_add(&u->ul, find_pos_to_insert(time));	//no issues because it returns thereafter
+			}
+			return 0;
+		}
+	}
+	return 1;
+}
+
+int ranking_store_time(char *name, unsigned int time, unsigned int vel) {
+	if (!update_user(name, time, vel))
+		return 0;
+	return add_new_user(name, time, vel);
+}
+
+int get_ranking_str(char **pbuf) {
+	unsigned int total_count = 0;
+	unsigned int w_offset = 0;
+	char temp[128];
+	struct user *u;
+	// Compute the number of bytes to be allocated
+	list_for_each_entry(u, &ranking_head, ul) {
+		snprintf(temp, 127, "%s | %u | %u\n", u->name, u->best_time, u->best_vel);
+		total_count += strlen(temp); 
+	}
+	// Allocate memory dynamically
+	*pbuf = (char*)kmalloc((total_count + 1) * sizeof(char), GFP_KERNEL);
+	if (!*pbuf)
+		return -1;
+	// Generate the string
+	list_for_each_entry(u, &ranking_head, ul) {
+		int cnt;
+		cnt = snprintf(temp, 127, "%s | %u | %u\n", u->name, u->best_time, u->best_vel);
+		strncpy(*pbuf + w_offset, temp, cnt);
+		w_offset += cnt;
+	}
+	// Add NUL at the end
+	(*pbuf)[total_count] = '\0';
+	return total_count;
 }
 
 void debug_print_ranking() {
