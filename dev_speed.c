@@ -20,10 +20,9 @@ static struct mutex dev_speed_mutex;
 unsigned int pir_dist;
 
 static ssize_t full_ranking_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
-	//debug_print_ranking();	//TO BE REMOVED
 	int ret;
 	char *ranking_str;
-	ret = get_ranking_str(&ranking_str);
+	ret = get_ranking_as_str(&ranking_str);
 	if (ret <= 0)
 		return ret;
 	strcpy(buf, ranking_str);
@@ -31,16 +30,29 @@ static ssize_t full_ranking_show(struct kobject *kobj, struct kobj_attribute *at
 	return ret;
 }
 
-static struct kobj_attribute rank_attr = __ATTR_RO(full_ranking);
+static ssize_t leader_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+	int ret;
+	char *leader_str;
+	ret = get_leader(&leader_str);
+	if (ret <= 0)
+		return ret;
+	strcpy(buf, leader_str);
+	kfree(leader_str);
+	return ret;
+}
 
-static struct attribute *prova_attrs[] = {
+static struct kobj_attribute rank_attr = __ATTR_RO(full_ranking);
+static struct kobj_attribute leader_attr = __ATTR_RO(leader);
+
+static struct attribute *speed_attrs[] = {
       &rank_attr.attr,
+      &leader_attr.attr,
       NULL,
 };
 
 static struct attribute_group attr_group = {
-      /* .name  = "nome_gruppo",      // Add if you want a folder */
-      .attrs = prova_attrs,
+      /* .name  = "name_of_group",      // Add if you want a folder */
+      .attrs = speed_attrs,
 };
 
 static int speed_sampling_thread(void *arg) {

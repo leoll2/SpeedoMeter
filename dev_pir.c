@@ -44,17 +44,13 @@ static ssize_t pir_read(struct file *file, char __user *p, size_t len, loff_t *p
 static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs *regs) {
 	struct miscdevice *pdev = (struct miscdevice *)dev;
 	if (pdev == &pir1_device) {
-		printk(KERN_DEBUG "Interrupt received from PIR1\n");
 		if (t1.tv_sec == 0) {
 			getnstimeofday(&t1);
-			printk(KERN_DEBUG "PIR1 time: %ld.%ld\n", t1.tv_sec, t1.tv_nsec);
 		}
 	}
 	else if (pdev == &pir2_device) {
-		printk(KERN_DEBUG "Interrupt received from PIR2\n");
 		if (t1.tv_sec != 0 && t2.tv_sec == 0) {
 			getnstimeofday(&t2);
-			printk(KERN_DEBUG "PIR2 seconds: %ld.%ld\n", t2.tv_sec, t2.tv_nsec);
 			complete(&sample_available);
 		}
 	}
@@ -88,9 +84,6 @@ int dev_pir_create(struct device *parent) {
 	      	printk(KERN_WARNING "Failed to request PIR GPIO pins\n");
 		return ret;
 	}
-
-	// gpio_set_debounce(pir_gpios[0].gpio, 1000);	// FOR BUTTON ONLY!!!
-	// gpio_set_debounce(pir_gpios[1].gpio, 1000);	// FOR BUTTON ONLY!!!
 
 	irq_pir1 = gpio_to_irq(pir_gpios[0].gpio);
 	irq_pir2 = gpio_to_irq(pir_gpios[1].gpio);
