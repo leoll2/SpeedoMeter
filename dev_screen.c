@@ -1,6 +1,7 @@
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/kthread.h>
+#include <linux/mutex.h>
 #include <linux/uaccess.h>
 #include <linux/sched.h>
 
@@ -56,6 +57,9 @@ static struct gpio screen_gpios[] = {
 
 static struct miscdevice screen_device;  //forward declaration
 static struct task_struct *idle_screen_thread_desc;
+static unsigned int last_num_displayed = 10000;
+static unsigned int last_num_dot_pos;
+static struct mutex last_num_mutex;
 
 static void reset_default_segments(void) {
 	unsigned int i;
@@ -143,6 +147,11 @@ int display_number(unsigned int value, unsigned int msecs, unsigned int dot_pos)
 
 	if (value > 9999)
 		return 1;
+		
+	mutex_lock(&last_num_mutex);
+	last_num_displayed = value;
+	last_num_dot_pos = dot_pos;
+	mutex_unlock(&last_num_mutex);
 
 	digits[0] = value % 10;
 	digits[1] = value / 10 % 10;
@@ -168,23 +177,42 @@ static int screen_open(struct inode *inode, struct file *file)
 
 static int screen_close(struct inode *inode, struct file *file)
 {
-    return 0;
+	return 0;
 }
 
 static ssize_t screen_read(struct file *file, char __user *p, size_t len, loff_t *ppos)
 {
-    copy_to_user(p, "scalo\n", 6);
-    return 6;
-}
-
-static ssize_t screen_write(struct file *file, const char __user *p, size_t len, loff_t *ppos)
-{
-	display_number(1234, 2000, 1);
-	return 1;
+	char buf[32];
+	unsigned int i;
+	int cnt, divisor = 1;
+	
+	if (*ppos != 0)
+		return 0;
+		
+	mutex_lock(&last_num_mutex);
+	if (last_num_dot_pos < 4) {
+		for (i = 0; i < last_num_dot_pos; ++i)
+			divisor *= 10;
+	}
+	if (last_num_displayed >= 10000)	// default value
+		cnt = snprintf(buf, 31, "No number displayed yet!\n");
+	else
+		cnt = snprintf(buf, 7, "%d.%d\n", last_num_displayed / divisor, last_num_displayed % divisor);
+	mutex_unlock(&last_num_mutex);
+	
+	buf[cnt] = '\0';
+	if (copy_to_user(p, buf, cnt)) {
+		printk(KERN_ERR "Invalid address passed as argument to screen_read()\n");
+		return -EFAULT;
+	}
+	*ppos += cnt;
+	return cnt;
 }
 
 int dev_screen_create(struct device *parent) {
 	int ret;    
+	
+	mutex_init(&last_num_mutex);
 		
 	// Register the device
 	screen_device.parent = parent;
@@ -226,7 +254,6 @@ void dev_screen_destroy(void) {
 static struct file_operations screen_fops = {
     .owner =        THIS_MODULE,
     .read =         screen_read,
-    .write =        screen_write,
     .open =         screen_open,
     .release =      screen_close,
 };
