@@ -10,7 +10,9 @@
 static struct miscdevice ranking_device;  //forward declaration
 static struct list_head ranking_head;
 static struct mutex ranking_mutex;
-static const char format[] = "%16s | %14u.%1u | %14u.%1u\n";
+static const char format[] = "%4u | %16s | %10u.%1u | %10u.%1u\n";
+static const char header_format[] = "%4s | %16s | %12s | %12s\n%.*s\n";
+static const char hline[] = "=====================================================";
 
 struct user {
 	char name[32];
@@ -87,15 +89,13 @@ int ranking_store_time(char *name, unsigned int time, unsigned int vel) {
 
 // buf must be at least 128 bytes long, otherwise buffer overflow may occur.
 unsigned int write_header(char *buf) {
-	const char header_format[] = "%16s | %16s | %16s\n%.*s\n";
-	const char hline[] = "======================================================";
-	
-	return snprintf(buf, 127, header_format, "USER", "TIME (s)", "SPEED (m/s)", 54, hline);
+	return snprintf(buf, 127, header_format, "POS", "USER", "TIME (s)", "SPEED (m/s)", 54, hline);
 }
 
 int get_ranking_as_str(char **pbuf) {
 	unsigned int total_count = 0;
 	unsigned int w_offset = 0;
+	unsigned int true_pos = 0, prev_pos = 0, prev_time = 0;
 	char temp[128];
 	struct user *u;
 	
@@ -103,7 +103,7 @@ int get_ranking_as_str(char **pbuf) {
 	total_count += write_header(temp);
 	mutex_lock(&ranking_mutex);
 	list_for_each_entry(u, &ranking_head, ul) {
-		total_count += snprintf(temp, 127, format, u->name, u->best_time/10, u->best_time%10, 
+		total_count += snprintf(temp, 127, format, 1, u->name, u->best_time/10, u->best_time%10, 
 							 u->best_vel/10, u->best_vel%10);
 	}
 	// Allocate memory dynamically
@@ -115,10 +115,17 @@ int get_ranking_as_str(char **pbuf) {
 	strncpy(*pbuf, temp, w_offset  );
 	list_for_each_entry(u, &ranking_head, ul) {
 		int cnt;
-		cnt = snprintf(temp, 127, format, u->name, u->best_time/10, u->best_time%10, 
-					u->best_vel/10, u->best_vel%10);
+		bool exequo;
+		++true_pos;
+		exequo = u->best_time == prev_time;
+		cnt = snprintf(temp, 127, format, exequo ? prev_pos : true_pos, u->name, 
+					u->best_time/10, u->best_time%10, u->best_vel/10, u->best_vel%10);
 		strncpy(*pbuf + w_offset, temp, cnt);
 		w_offset += cnt;
+		if (!exequo) {
+			prev_time = u->best_time;
+			prev_pos = true_pos;
+		}		
 	}
 	mutex_unlock(&ranking_mutex);
 	// Add NUL at the end
@@ -142,7 +149,7 @@ int get_leader(char **plead) {
 	else {
 		cnt = write_header(*plead);
 		u_first = list_entry(ranking_head.next, struct user, ul);
-		cnt += snprintf(*plead + cnt, 127, format, u_first->name, u_first->best_time/10, u_first->best_time%10, 
+		cnt += snprintf(*plead + cnt, 127, format, 1, u_first->name, u_first->best_time/10, u_first->best_time%10, 
 					  u_first->best_vel/10, u_first->best_vel%10);
 	}
 	(*plead)[255] = '\0';
