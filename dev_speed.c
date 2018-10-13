@@ -69,13 +69,11 @@ static int speed_sampling_thread(void *arg) {
 				
 			// Process the data coming from sensors
 			delta_dsec = 10 * (t2.tv_sec - t1.tv_sec) + (t2.tv_nsec / 100000000) - (t1.tv_nsec / 100000000);
-			vel = pir_dist / delta_dsec;	// decimeters / deciseconds
-			printk(KERN_DEBUG "Delta deciseconds: %ld\n", delta_dsec);
-			printk(KERN_DEBUG "Velocita calcolata: %d\n", vel);
-			display_number(delta_dsec, 5000);
+			vel = 10 * pir_dist / delta_dsec;	// decimeters / seconds
 			ret = ranking_store_time(username, delta_dsec, vel);
 			if (ret)
 				printk(KERN_WARNING "Failed to add user to the ranking\n");
+			display_number(delta_dsec, 5000, 1);
 
 			t1.tv_sec = 0;
 			t2.tv_sec = 0;
@@ -158,47 +156,81 @@ int dev_speed_create(unsigned int sensors_dist) {
     	struct kobject *kobj;
     	
     	pir_dist = sensors_dist;
-    
-    	ret = misc_register(&speed_device);
-    	if (ret)
-        	return ret;
-    
-    	kobj = &speed_device.this_device->kobj;
 
-    	ret = sysfs_create_group(kobj, &attr_group);
-    	if(ret) {
-        	dev_err(speed_device.this_device, "failed to register sysfs\n");
-        	return ret;
+	/* Register 'speed' device */
+    	if (misc_register(&speed_device)) {
+    		printk(KERN_ERR "Failed to register 'speed' device as misc.\n");
+    		ret = 1;
+        	goto exit1;
+        }
+    
+    	/* Add 'speed' and its attributes to sysfs */
+    	kobj = &speed_device.this_device->kobj;
+    	if (sysfs_create_group(kobj, &attr_group)) {
+        	dev_err(speed_device.this_device, "Failed to create sysfs group for 'speed' device.\n");
+        	ret = 2;
+        	goto exit2;
     	}
     
-    	ret = sysfs_create_link(kernel_kobj, kobj, "speed");
-	if(ret) {
-		dev_err(speed_device.this_device, "Failed to register sysfs\n");
-		return ret;
+    	if (sysfs_create_link(kernel_kobj, kobj, "speed")) {
+		dev_err(speed_device.this_device, "Failed to add sysfs like for 'speed' device.\n");
+		ret = 3;
+		goto exit3;
 	}
 
-	ret = dev_screen_create(speed_device.this_device);
-	if (ret)
-    		return ret;
-	ret = dev_pir_create(speed_device.this_device);
-	if (ret)
-		return ret;
-	ret = dev_ranking_create(speed_device.this_device);
-	if (ret)
-		return ret;
+	/* Create 'screen' device */
+	if (dev_screen_create(speed_device.this_device)) {
+		dev_err(speed_device.this_device, "Failed to create  'screen' device.\n");
+		ret = 4;
+    		goto exit4;
+    	}
+    	
+    	/* Create 'pir' device */
+	if (dev_pir_create(speed_device.this_device)) {
+		dev_err(speed_device.this_device, "Failed to create  'pir' device.\n");
+		ret = 5;
+		goto exit5;
+	}
+	
+	/* Create 'ranking' device */
+	if (dev_ranking_create(speed_device.this_device)) {
+		dev_err(speed_device.this_device, "Failed to create  'ranking' device.\n");
+		ret = 6;
+		goto exit6;
+	}
 
+	/* Initialize semaphores */
 	mutex_init(&username_mutex);
 	mutex_init(&dev_speed_mutex);
 
+	/* Start the thread for processing samples */
 	speed_sampling_thread_desc = kthread_run(speed_sampling_thread, NULL, "speed sampling thread");
 	if (IS_ERR(speed_sampling_thread_desc)) {
-		printk(KERN_WARNING "Failed to initialize the thread to handle the speed sampling.\n");
-		return PTR_ERR(speed_sampling_thread_desc);
+		printk(KERN_ERR "Failed to initialize the thread to handle the speed sampling.\n");
+		ret = 7;
+		goto exit7;
 	}
-	// TODO: GESTIRE CONDIZIONI DI ERRORE!!!
-    
+	
+	/* Here means that every previous action succeeded */
 	printk("Speed device created (minor = %d)\n", speed_device.minor);
-	return 0;
+	ret = 0;
+	goto exit0;
+
+exit7:
+	dev_ranking_destroy();
+exit6:
+	dev_pir_destroy();
+exit5:
+	dev_screen_destroy();	
+exit4:
+	sysfs_remove_link(kernel_kobj, "speed");
+exit3:
+	sysfs_remove_group(&speed_device.this_device->kobj, &attr_group);
+exit2:    
+	misc_deregister(&speed_device);
+exit1:
+exit0:
+	return ret;
 }
 
 void dev_speed_destroy(void) {

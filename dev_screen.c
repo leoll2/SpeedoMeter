@@ -115,7 +115,7 @@ static int stop_idle_screen_thread(void) {
 	return 0;
 }
 
-static int display_digit(unsigned int digit, unsigned int value) {
+static int display_digit(unsigned int digit, unsigned int value, bool dot) {
 	unsigned int i;
 
 	if (digit > 3 || value > 9)
@@ -131,10 +131,11 @@ static int display_digit(unsigned int digit, unsigned int value) {
 	for (i = 0; i < 7; ++i) {
 		gpio_set_value(screen_gpios[i].gpio, digit_segments[value][i]);
 	}
+	gpio_set_value(screen_gpios[7].gpio, dot ? 1 : 0);
 	return 0;
 }
 
-int display_number(unsigned int value, unsigned int msecs) {
+int display_number(unsigned int value, unsigned int msecs, unsigned int dot_pos) {
 	unsigned int t;
 	unsigned int digit_pos = 0;
 	unsigned int digits[4];
@@ -151,7 +152,7 @@ int display_number(unsigned int value, unsigned int msecs) {
 	stop_idle_screen_thread();
 
 	for (t = 0; t < refresh_loops; ++t) {
-		display_digit(digit_pos, digits[digit_pos]);
+		display_digit(digit_pos, digits[digit_pos], digit_pos == dot_pos);
 		digit_pos = (digit_pos + 1) % 4;		
 		usleep_range(MIN_REFRESH_DELAY, MAX_REFRESH_DELAY);
 	}
@@ -178,8 +179,7 @@ static ssize_t screen_read(struct file *file, char __user *p, size_t len, loff_t
 
 static ssize_t screen_write(struct file *file, const char __user *p, size_t len, loff_t *ppos)
 {
-	display_number(1234, 2000);
-	//display_digit(0, 5);
+	display_number(1234, 2000, 1);
 	return 1;
 }
 

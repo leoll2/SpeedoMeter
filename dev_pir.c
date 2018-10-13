@@ -1,6 +1,7 @@
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
+#include <linux/rtc.h>
 #include <linux/sched.h>
 #include <linux/uaccess.h>
 
@@ -11,6 +12,8 @@
 
 struct timespec t1,
 			     t2;
+static char last_irq_time_pir1[64];
+static char last_irq_time_pir2[64];
 struct completion sample_available;
 struct completion sample_consumed;
 
@@ -37,8 +40,30 @@ static int pir_close(struct inode *inode, struct file *file)
 
 static ssize_t pir_read(struct file *file, char __user *p, size_t len, loff_t *ppos)
 {
-    copy_to_user(p, "beppe\n", 6);
-    return 6;
+	char buf[128];
+	int cnt;
+	if (*ppos != 0)
+		return 0;
+	cnt = snprintf(buf, 127, "PIR1: \t%s\nPIR2: \t%s\n", 
+				strlen(last_irq_time_pir1) ? last_irq_time_pir1 : "never", 
+				strlen(last_irq_time_pir2) ? last_irq_time_pir2 : "never");
+	buf[cnt] = '\0';
+	if (copy_to_user(p, buf, cnt)) {
+		printk(KERN_ERR "Invalid address passed as argument to pir_read()\n");
+		return -EFAULT;
+	}
+	*ppos += cnt;
+	return cnt;
+}
+
+void save_irq_time(char* buf, time64_t tv_sec, long tv_nsec) {
+	struct rtc_time tm;
+	unsigned long local_time = (u32)(2 * 3600 + tv_sec - (sys_tz.tz_minuteswest * 60));
+	rtc_time_to_tm(local_time, &tm);
+	
+	snprintf(buf, 63, "%04d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+			tm.tm_hour, tm.tm_min, tm.tm_sec);
+	buf[63] = '\0';
 }
 
 static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs *regs) {
@@ -46,11 +71,13 @@ static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs
 	if (pdev == &pir1_device) {
 		if (t1.tv_sec == 0) {
 			getnstimeofday(&t1);
+			save_irq_time(last_irq_time_pir1, t1.tv_sec, t1.tv_nsec);
 		}
 	}
 	else if (pdev == &pir2_device) {
 		if (t1.tv_sec != 0 && t2.tv_sec == 0) {
 			getnstimeofday(&t2);
+			save_irq_time(last_irq_time_pir2, t2.tv_sec, t2.tv_nsec);
 			complete(&sample_available);
 		}
 	}
@@ -65,6 +92,7 @@ int dev_pir_create(struct device *parent) {
 	int ret;    
 	
 	t1.tv_sec = t2.tv_sec = 0;
+	last_irq_time_pir1[0] = last_irq_time_pir2[0] = '\0';
 		
 	// Register the first PIR device
 	pir1_device.parent = parent;

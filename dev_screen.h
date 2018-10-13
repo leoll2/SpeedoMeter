@@ -8,7 +8,7 @@
 
 int dev_screen_create(struct device *parent);
 void dev_screen_destroy(void);
-int display_number(unsigned int value, unsigned int msecs);
+int display_number(unsigned int value, unsigned int msecs, unsigned int dot_pos);
 
 #endif /* DEV_SCREEN_H */
 

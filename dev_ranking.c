@@ -10,8 +10,7 @@
 static struct miscdevice ranking_device;  //forward declaration
 static struct list_head ranking_head;
 static struct mutex ranking_mutex;
-static const char format[] = "%-16s | %-16u | %-16u\n";
-
+static const char format[] = "%16s | %14u.%1u | %14u.%1u\n";
 
 struct user {
 	char name[32];
@@ -88,9 +87,10 @@ int ranking_store_time(char *name, unsigned int time, unsigned int vel) {
 
 // buf must be at least 128 bytes long, otherwise buffer overflow may occur.
 unsigned int write_header(char *buf) {
-	const char header_format[] = "%-16s | %-16s | %-16s\n%.*s\n";
-	const char hline[] = "================================================";
-	return snprintf(buf, 127, header_format, "USER", "TIME (ds)", "SPEED", 48, hline);
+	const char header_format[] = "%16s | %16s | %16s\n%.*s\n";
+	const char hline[] = "======================================================";
+	
+	return snprintf(buf, 127, header_format, "USER", "TIME (s)", "SPEED (m/s)", 54, hline);
 }
 
 int get_ranking_as_str(char **pbuf) {
@@ -100,21 +100,23 @@ int get_ranking_as_str(char **pbuf) {
 	struct user *u;
 	
 	// Compute the number of bytes to be allocated
-	total_count += write_header(temp); //snprintf(temp, 127, header_format, "USER", "TIME (ds)", "SPEED", 48, hline);
+	total_count += write_header(temp);
 	mutex_lock(&ranking_mutex);
 	list_for_each_entry(u, &ranking_head, ul) {
-		total_count += snprintf(temp, 127, format, u->name, u->best_time, u->best_vel);
+		total_count += snprintf(temp, 127, format, u->name, u->best_time/10, u->best_time%10, 
+							 u->best_vel/10, u->best_vel%10);
 	}
 	// Allocate memory dynamically
 	*pbuf = (char*)kmalloc((total_count + 1) * sizeof(char), GFP_KERNEL);
 	if (!*pbuf)
 		return -1;
 	// Generate the string
-	w_offset = write_header(temp); //snprintf(temp, 127, header_format, "USER", "TIME (ds)", "SPEED", 48, hline);
+	w_offset = write_header(temp);
 	strncpy(*pbuf, temp, w_offset  );
 	list_for_each_entry(u, &ranking_head, ul) {
 		int cnt;
-		cnt = snprintf(temp, 127, format, u->name, u->best_time, u->best_vel);
+		cnt = snprintf(temp, 127, format, u->name, u->best_time/10, u->best_time%10, 
+					u->best_vel/10, u->best_vel%10);
 		strncpy(*pbuf + w_offset, temp, cnt);
 		w_offset += cnt;
 	}
@@ -140,7 +142,8 @@ int get_leader(char **plead) {
 	else {
 		cnt = write_header(*plead);
 		u_first = list_entry(ranking_head.next, struct user, ul);
-		cnt += snprintf(*plead + cnt, 127, format, u_first->name, u_first->best_time, u_first->best_vel);
+		cnt += snprintf(*plead + cnt, 127, format, u_first->name, u_first->best_time/10, u_first->best_time%10, 
+					  u_first->best_vel/10, u_first->best_vel%10);
 	}
 	(*plead)[255] = '\0';
 	mutex_unlock(&ranking_mutex);
@@ -188,7 +191,10 @@ static ssize_t ranking_read(struct file *file, char __user *p, size_t len, loff_
 		return 0;
 	if (len < cnt)
 		cnt = len;
-	copy_to_user(p, s, cnt);
+	if (copy_to_user(p, s, cnt)) {
+		printk(KERN_ERR "Invalid address passed as argument to ranking_read()\n");
+		return -EFAULT;
+	}
 	kfree(s);
 	*ppos += cnt;
 	return cnt;
