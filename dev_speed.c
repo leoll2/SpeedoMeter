@@ -19,7 +19,7 @@ static struct mutex username_mutex;
 static struct mutex dev_speed_mutex;
 unsigned int pir_dist;
 
-static ssize_t full_ranking_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+static ssize_t leaderboard_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
 	int ret;
 	char *ranking_str;
 	ret = get_ranking_as_str(&ranking_str);
@@ -41,12 +41,19 @@ static ssize_t leader_show(struct kobject *kobj, struct kobj_attribute *attr, ch
 	return ret;
 }
 
-static struct kobj_attribute rank_attr = __ATTR_RO(full_ranking);
+static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+	flush_ranking();
+	return count;
+}
+
+static struct kobj_attribute leaderboard_attr = __ATTR_RO(leaderboard);
 static struct kobj_attribute leader_attr = __ATTR_RO(leader);
+static struct kobj_attribute reset_attr = __ATTR_WO(reset);
 
 static struct attribute *speed_attrs[] = {
-      &rank_attr.attr,
+      &leaderboard_attr.attr,
       &leader_attr.attr,
+      &reset_attr.attr,
       NULL,
 };
 

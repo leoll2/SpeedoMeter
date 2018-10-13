@@ -174,7 +174,7 @@ void flush_ranking(void) {
 		kfree(u);
 	}
 	mutex_unlock(&ranking_mutex);
-	printk(KERN_DEBUG "List freed!!!\n");
+	printk(KERN_DEBUG "Leaderboard has been reset.\n");
 }
 
 static int ranking_open(struct inode *inode, struct file *file)
