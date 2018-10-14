@@ -1,6 +1,6 @@
 # SpeedoMeter
 
-SpeedoMeter is a Linux kernel module that controls a homemade device to measure speed (namely a speed camera) and display it. The module also offers a bunch of additional features, including the history of past measurements in a ranking fashion.
+SpeedoMeter is a Linux kernel module that controls a homemade device to measure speed (namely a speed camera) and display it. It also offers a bunch of additional features, including the history of past measurements in a ranking fashion.
 
 ## Hardware
 
