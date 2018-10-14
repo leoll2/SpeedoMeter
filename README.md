@@ -87,6 +87,12 @@ Write anything in the reset attribute to completely flush the leaderboard:
 
 `sudo sh -c "echo 'wabbit' > reset"`
 
+## Additional notes
+
+* The display will show a default pattern when not used.
+* A led lights up when its corresponding PIR triggers. This is done in hardware, not software, so an interrupt may not necessarily be generated (if IRQs are disabled, for instance)
+* A read-only device in /dev/ is also created for the PIRs, display and ranking. Try reading them!
+* PIRs are encapsulated in a cardboard box with a small hole in order to cut their raw angle of view (which is ~120° without the box)
 
 ## Any question?
 
