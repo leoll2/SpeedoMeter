@@ -85,7 +85,7 @@ Are you the leader in the ranking? Then your name will be stored in the correspo
 
 Write anything in the reset attribute to completely flush the leaderboard:
 
-`sudo sh -c "echo 'wabbit' > reset"
+`sudo sh -c "echo 'wabbit' > reset"`
 
 
 ## Any question?
