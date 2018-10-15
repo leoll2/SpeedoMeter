@@ -7,7 +7,7 @@
 
 #include "dev_screen.h"
 
-#define MIN_REFRESH_DELAY		500
+#define MIN_REFRESH_DELAY	500
 #define MAX_REFRESH_DELAY	600
 
 #define PIN_A	21	// segment A
@@ -61,21 +61,24 @@ static unsigned int last_num_displayed = 10000;
 static unsigned int last_num_dot_pos;
 static struct mutex last_num_mutex;
 
-static void reset_default_segments(void) {
+static void reset_default_segments(void) 
+{
 	unsigned int i;
 	for (i = 0; i < 7; ++i) {
 		gpio_set_value(screen_gpios[i].gpio, default_segments[i]);
 	}
 }
 
-static void clear_digit_pins(void) {
+static void clear_digit_pins(void) 
+{
 	unsigned int i;
 	for (i = 0; i < 4; ++i) {
 		gpio_set_value(screen_gpios[i + 8].gpio, 0);
 	}
 }
 
-static int idle_screen_thread(void *arg) {
+static int idle_screen_thread(void *arg) 
+{
 	unsigned int digit_pos = 0;
 	unsigned int i;
 
@@ -87,8 +90,8 @@ static int idle_screen_thread(void *arg) {
 		// Prepare the default pattern
 		reset_default_segments();
 
-		// Show it in the right digit
-		gpio_set_value(screen_gpios[8 + 3 - digit_pos].gpio, 1);	// reverse the digit pos
+		// Show it in the right digit (reversed pos)
+		gpio_set_value(screen_gpios[8 + 3 - digit_pos].gpio, 1);
 		digit_pos = (digit_pos + 1) % 4;
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(HZ);
@@ -96,7 +99,8 @@ static int idle_screen_thread(void *arg) {
 	return 0;
 }
 
-static int start_idle_screen_thread(void) {
+static int start_idle_screen_thread(void) 
+{
 	if (idle_screen_thread_desc != NULL) {
 		printk(KERN_WARNING "Can't start the idle screen thread because it's already running!\n");
 		return 1;
@@ -109,7 +113,8 @@ static int start_idle_screen_thread(void) {
 	return 0;
 }
 
-static int stop_idle_screen_thread(void) {
+static int stop_idle_screen_thread(void) 
+{
 	if (idle_screen_thread_desc == NULL) {
 		printk(KERN_WARNING "Can't stop the idle screen thread because it wasn't running!\n");
 		return 1;
@@ -119,7 +124,8 @@ static int stop_idle_screen_thread(void) {
 	return 0;
 }
 
-static int display_digit(unsigned int digit, unsigned int value, bool dot) {
+static int display_digit(unsigned int digit, unsigned int value, bool dot) 
+{
 	unsigned int i;
 
 	if (digit > 3 || value > 9)
@@ -209,7 +215,8 @@ static ssize_t screen_read(struct file *file, char __user *p, size_t len, loff_t
 	return cnt;
 }
 
-int dev_screen_create(struct device *parent) {
+int dev_screen_create(struct device *parent) 
+{
 	int ret;    
 	
 	mutex_init(&last_num_mutex);
@@ -236,7 +243,8 @@ int dev_screen_create(struct device *parent) {
 	return 0;
 }
 
-void dev_screen_destroy(void) {
+void dev_screen_destroy(void) 
+{
 	// Stop the thread showing the idle pattern on the screen
 	stop_idle_screen_thread();
 
@@ -252,14 +260,14 @@ void dev_screen_destroy(void) {
 
 
 static struct file_operations screen_fops = {
-    .owner =        THIS_MODULE,
-    .read =         screen_read,
-    .open =         screen_open,
-    .release =      screen_close,
+    .owner = 	THIS_MODULE,
+    .read = 	screen_read,
+    .open = 	screen_open,
+    .release = 	screen_close,
 };
 
 static struct miscdevice screen_device = {
-    .minor =    MISC_DYNAMIC_MINOR, 
-    .name =     "screen", 
-    .fops =     &screen_fops,
+    .minor = 	MISC_DYNAMIC_MINOR, 
+    .name = 	"screen", 
+    .fops = 	&screen_fops,
 };

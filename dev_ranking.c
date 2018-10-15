@@ -7,7 +7,7 @@
 
 #include "dev_ranking.h"
 
-static struct miscdevice ranking_device;  //forward declaration
+static struct miscdevice ranking_device;
 static struct list_head ranking_head;
 static struct mutex ranking_mutex;
 static const char format[] = "%4u | %16s | %10u.%1u | %10u.%1u\n";
@@ -21,8 +21,11 @@ struct user {
 	struct list_head ul;
 };
 
-// Implicitly that the caller already holds a lock on the ranking
-struct list_head *find_pos_to_insert(unsigned int time) {
+/* Finds the position to insert a new element in a sorted list (ranking)
+*  Implicitly assumes that the caller already holds a lock on the ranking
+*/
+struct list_head *find_pos_to_insert(unsigned int time) 
+{
 	struct list_head *p;
 	struct user *u_next;
 	
@@ -48,7 +51,8 @@ struct list_head *find_pos_to_insert(unsigned int time) {
 	return ranking_head.prev;
 }
 
-int add_new_user(char *name, unsigned int time, unsigned int vel) {
+int add_new_user(char *name, unsigned int time, unsigned int vel) 
+{
 	struct user *new_user = kmalloc(sizeof(struct user), GFP_KERNEL);
 	if (!new_user)
 		return -1;
@@ -61,7 +65,8 @@ int add_new_user(char *name, unsigned int time, unsigned int vel) {
 	return 0;
 }
 
-int update_user(char *name, unsigned int time, unsigned int vel)  {
+int update_user(char *name, unsigned int time, unsigned int vel)  
+{
 	struct user *u, *next;
 	mutex_lock(&ranking_mutex);
 	list_for_each_entry_safe(u, next, &ranking_head, ul) {
@@ -69,9 +74,9 @@ int update_user(char *name, unsigned int time, unsigned int vel)  {
 			if (time < u->best_time) {
 				u->best_time = time;
 				u->best_vel = vel;
-				//Reposition
+				//Reposition (no issues because returns thereafter)
 				list_del(&u->ul);
-				list_add(&u->ul, find_pos_to_insert(time));	//no issues because it returns thereafter
+				list_add(&u->ul, find_pos_to_insert(time));
 			}
 			mutex_unlock(&ranking_mutex);
 			return 0;
@@ -81,18 +86,22 @@ int update_user(char *name, unsigned int time, unsigned int vel)  {
 	return 1;
 }
 
-int ranking_store_time(char *name, unsigned int time, unsigned int vel) {
+int ranking_store_time(char *name, unsigned int time, unsigned int vel) 
+{
 	if (!update_user(name, time, vel))
 		return 0;
 	return add_new_user(name, time, vel);
 }
 
-// buf must be at least 128 bytes long, otherwise buffer overflow may occur.
-unsigned int write_header(char *buf) {
-	return snprintf(buf, 127, header_format, "POS", "USER", "TIME (s)", "SPEED (m/s)", 54, hline);
+/* buf must be at least 128 bytes long, otherwise buffer overflow may occur.*/
+unsigned int write_header(char *buf) 
+{
+	return snprintf(buf, 127, header_format, 
+			"POS", "USER", "TIME (s)", "SPEED (m/s)", 54, hline);
 }
 
-int get_ranking_as_str(char **pbuf) {
+int get_ranking_as_str(char **pbuf) 
+{
 	unsigned int total_count = 0;
 	unsigned int w_offset = 0;
 	unsigned int true_pos = 0, prev_pos = 0, prev_time = 0;
@@ -103,8 +112,9 @@ int get_ranking_as_str(char **pbuf) {
 	total_count += write_header(temp);
 	mutex_lock(&ranking_mutex);
 	list_for_each_entry(u, &ranking_head, ul) {
-		total_count += snprintf(temp, 127, format, 1, u->name, u->best_time/10, u->best_time%10, 
-							 u->best_vel/10, u->best_vel%10);
+		total_count += snprintf(temp, 127, format, 1, u->name, 
+					u->best_time/10, u->best_time%10, 
+					u->best_vel/10, u->best_vel%10);
 	}
 	// Allocate memory dynamically
 	*pbuf = (char*)kmalloc((total_count + 1) * sizeof(char), GFP_KERNEL);
@@ -119,7 +129,7 @@ int get_ranking_as_str(char **pbuf) {
 		++true_pos;
 		exequo = u->best_time == prev_time;
 		cnt = snprintf(temp, 127, format, exequo ? prev_pos : true_pos, u->name, 
-					u->best_time/10, u->best_time%10, u->best_vel/10, u->best_vel%10);
+				u->best_time/10, u->best_time%10, u->best_vel/10, u->best_vel%10);
 		strncpy(*pbuf + w_offset, temp, cnt);
 		w_offset += cnt;
 		if (!exequo) {
@@ -133,7 +143,8 @@ int get_ranking_as_str(char **pbuf) {
 	return total_count;
 }
 
-int get_leader(char **plead) {
+int get_leader(char **plead) 
+{
 	struct user *u_first;
 	int cnt;
 	
@@ -149,24 +160,28 @@ int get_leader(char **plead) {
 	else {
 		cnt = write_header(*plead);
 		u_first = list_entry(ranking_head.next, struct user, ul);
-		cnt += snprintf(*plead + cnt, 127, format, 1, u_first->name, u_first->best_time/10, u_first->best_time%10, 
-					  u_first->best_vel/10, u_first->best_vel%10);
+		cnt += snprintf(*plead + cnt, 127, format, 1, u_first->name, 
+				u_first->best_time/10, u_first->best_time%10, 
+				u_first->best_vel/10, u_first->best_vel%10);
 	}
 	(*plead)[255] = '\0';
 	mutex_unlock(&ranking_mutex);
 	return cnt;
 }
 
-void debug_print_ranking() {
+void debug_print_ranking(void) 
+{
 	struct user *u;
 	mutex_lock(&ranking_mutex);
 	list_for_each_entry(u, &ranking_head, ul) {
-		printk(KERN_DEBUG "User: %s  time: %u  vel: %u\n", u->name, u->best_time, u->best_vel);
+		printk(KERN_DEBUG "User: %s  time: %u  vel: %u\n", 
+				u->name, u->best_time, u->best_vel);
 	}
 	mutex_unlock(&ranking_mutex);
 }
 
-void flush_ranking(void) {
+void flush_ranking(void) 
+{
 	struct user *u, *next;
 	mutex_lock(&ranking_mutex);
 	list_for_each_entry_safe(u, next, &ranking_head, ul) {
@@ -207,7 +222,8 @@ static ssize_t ranking_read(struct file *file, char __user *p, size_t len, loff_
 	return cnt;
 }
 
-int dev_ranking_create(struct device *parent) {
+int dev_ranking_create(struct device *parent) 
+{
 	int ret;    
 	
 	INIT_LIST_HEAD(&ranking_head);
@@ -222,7 +238,8 @@ int dev_ranking_create(struct device *parent) {
 	return 0;
 }
 
-void dev_ranking_destroy(void) {
+void dev_ranking_destroy(void) 
+{
 	flush_ranking();
 	// Unregister the device    
 	misc_deregister(&ranking_device);
@@ -239,5 +256,5 @@ static struct file_operations ranking_fops = {
 static struct miscdevice ranking_device = {
     .minor =  	MISC_DYNAMIC_MINOR, 
     .name =  	"ranking", 
-    .fops =     	&ranking_fops,
+    .fops = 	&ranking_fops,
 };

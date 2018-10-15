@@ -10,23 +10,20 @@
 #define PIN_PIR1	15 	// PIR1
 #define PIN_PIR2	18	// PIR2
 
-struct timespec t1,
-			     t2;
+struct timespec t1, t2;
 static char last_irq_time_pir1[64];
 static char last_irq_time_pir2[64];
 struct completion sample_available;
 struct completion sample_consumed;
 
-unsigned int irq_pir1,
-		       irq_pir2;
+unsigned int irq_pir1, irq_pir2;
 
 static struct gpio pir_gpios[] = {
 	{ PIN_PIR1, GPIOF_IN, "PIR 1" },
 	{ PIN_PIR2, GPIOF_IN, "PIR 2" },
 };
 
-static struct miscdevice pir1_device,  //forward declaration
-					    pir2_device;
+static struct miscdevice pir1_device, pir2_device;
 
 static int pir_open(struct inode *inode, struct file *file)
 {
@@ -35,7 +32,7 @@ static int pir_open(struct inode *inode, struct file *file)
 
 static int pir_close(struct inode *inode, struct file *file)
 {
-    return 0;
+	return 0;
 }
 
 static ssize_t pir_read(struct file *file, char __user *p, size_t len, loff_t *ppos)
@@ -45,8 +42,8 @@ static ssize_t pir_read(struct file *file, char __user *p, size_t len, loff_t *p
 	if (*ppos != 0)
 		return 0;
 	cnt = snprintf(buf, 127, "PIR1: \t%s\nPIR2: \t%s\n", 
-				strlen(last_irq_time_pir1) ? last_irq_time_pir1 : "never", 
-				strlen(last_irq_time_pir2) ? last_irq_time_pir2 : "never");
+			strlen(last_irq_time_pir1) ? last_irq_time_pir1 : "never", 
+			strlen(last_irq_time_pir2) ? last_irq_time_pir2 : "never");
 	buf[cnt] = '\0';
 	if (copy_to_user(p, buf, cnt)) {
 		printk(KERN_ERR "Invalid address passed as argument to pir_read()\n");
@@ -56,17 +53,19 @@ static ssize_t pir_read(struct file *file, char __user *p, size_t len, loff_t *p
 	return cnt;
 }
 
-void save_irq_time(char* buf, time64_t tv_sec, long tv_nsec) {
+void save_irq_time(char* buf, time64_t tv_sec, long tv_nsec) 
+{
 	struct rtc_time tm;
 	unsigned long local_time = (u32)(2 * 3600 + tv_sec - (sys_tz.tz_minuteswest * 60));
 	rtc_time_to_tm(local_time, &tm);
 	
 	snprintf(buf, 63, "%04d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-			tm.tm_hour, tm.tm_min, tm.tm_sec);
+		 tm.tm_hour, tm.tm_min, tm.tm_sec);
 	buf[63] = '\0';
 }
 
-static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs *regs) {
+static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs *regs) 
+{
 	struct miscdevice *pdev = (struct miscdevice *)dev;
 	if (pdev == &pir1_device) {
 		if (t1.tv_sec == 0) {
@@ -88,7 +87,8 @@ static irq_handler_t pir_irq_handler(unsigned int irq, void *dev, struct pt_regs
 	return (irq_handler_t) IRQ_HANDLED;
 }
 
-int dev_pir_create(struct device *parent) {
+int dev_pir_create(struct device *parent) 
+{
 	int ret;    
 	
 	t1.tv_sec = t2.tv_sec = 0;
@@ -118,18 +118,18 @@ int dev_pir_create(struct device *parent) {
 
 	// Request IRQ line
 	if (request_irq(irq_pir1, 
-				(irq_handler_t) pir_irq_handler,
-				IRQF_TRIGGER_RISING, 
-				"pir_gpio_handler", 
-				(void *)&pir1_device)) {
+			(irq_handler_t) pir_irq_handler,
+			IRQF_TRIGGER_RISING, 
+			"pir_gpio_handler", 
+			(void *)&pir1_device)) {
 		printk(KERN_ERR "GPIO PIR1: cannot register IRQ\n");
 		return -EIO;
 	}
 	if (request_irq(irq_pir2, 
-				(irq_handler_t) pir_irq_handler,
-				IRQF_TRIGGER_RISING, 
-				"pir_gpio_handler", 
-				(void *)&pir2_device)) {
+			(irq_handler_t) pir_irq_handler,
+			IRQF_TRIGGER_RISING, 
+			"pir_gpio_handler", 
+			(void *)&pir2_device)) {
 		printk(KERN_ERR "GPIO PIR2: cannot register IRQ\n");
 		return -EIO;
 	}
@@ -144,7 +144,8 @@ int dev_pir_create(struct device *parent) {
 	return 0;
 }
 
-void dev_pir_destroy(void) {
+void dev_pir_destroy(void) 
+{
 	// Release the interrupt line
 	free_irq(irq_pir1, (void *)&pir1_device);
 	free_irq(irq_pir2, (void *)&pir2_device);
@@ -159,20 +160,20 @@ void dev_pir_destroy(void) {
 
 
 static struct file_operations pir_fops = {
-    .owner =   	THIS_MODULE,
-    .read =        pir_read,
-    .open =       pir_open,
-    .release =   pir_close,
+    .owner =	THIS_MODULE,
+    .read =	pir_read,
+    .open =	pir_open,
+    .release = 	pir_close,
 };
 
 static struct miscdevice pir1_device = {
-    .minor =   	MISC_DYNAMIC_MINOR, 
-    .name =   	"pir1", 
-    .fops =    	&pir_fops,
+    .minor = 	MISC_DYNAMIC_MINOR, 
+    .name = 	"pir1", 
+    .fops = 	&pir_fops,
 };
 
 static struct miscdevice pir2_device = {
-    .minor =   	MISC_DYNAMIC_MINOR, 
-    .name =   	"pir2", 
-    .fops =    	&pir_fops,
+    .minor =	MISC_DYNAMIC_MINOR, 
+    .name = 	"pir2", 
+    .fops = 	&pir_fops,
 };

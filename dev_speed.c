@@ -3,7 +3,7 @@
 #include <linux/ktime.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
-#include <linux/uaccess.h>  // for copy_to_user
+#include <linux/uaccess.h>
 #include <linux/wait.h>
 
 #include "dev_speed.h"
@@ -19,7 +19,8 @@ static struct mutex username_mutex;
 static struct mutex dev_speed_mutex;
 unsigned int pir_dist;
 
-static ssize_t leaderboard_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+static ssize_t leaderboard_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) 
+{
 	int ret;
 	char *ranking_str;
 	ret = get_ranking_as_str(&ranking_str);
@@ -30,7 +31,8 @@ static ssize_t leaderboard_show(struct kobject *kobj, struct kobj_attribute *att
 	return ret;
 }
 
-static ssize_t leader_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
+static ssize_t leader_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) 
+{
 	int ret;
 	char *leader_str;
 	ret = get_leader(&leader_str);
@@ -41,7 +43,8 @@ static ssize_t leader_show(struct kobject *kobj, struct kobj_attribute *attr, ch
 	return ret;
 }
 
-static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) {
+static ssize_t reset_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count) 
+{
 	flush_ranking();
 	return count;
 }
@@ -62,7 +65,8 @@ static struct attribute_group attr_group = {
       .attrs = speed_attrs,
 };
 
-static int speed_sampling_thread(void *arg) {
+static int speed_sampling_thread(void *arg) 
+{
 	long delta_dsec;
 	unsigned int vel;
 	while(!kthread_should_stop()) {
@@ -71,11 +75,13 @@ static int speed_sampling_thread(void *arg) {
 			wait_for_completion(&sample_available);
 			disable_irq(irq_pir1);
 			disable_irq(irq_pir2);
-			if (t1.tv_sec == 0 || t2.tv_sec == 0)	// if missing data, the thread was woken up by the closing function
+			// if missing data, the thread was woken up by the closing function
+			if (t1.tv_sec == 0 || t2.tv_sec == 0)
 				break;
 				
 			// Process the data coming from sensors
-			delta_dsec = 10 * (t2.tv_sec - t1.tv_sec) + (t2.tv_nsec / 100000000) - (t1.tv_nsec / 100000000);
+			delta_dsec = 10 * (t2.tv_sec - t1.tv_sec) + 
+				     (t2.tv_nsec / 100000000) - (t1.tv_nsec / 100000000);
 			vel = 10 * pir_dist / delta_dsec;	// decimeters / seconds
 			ret = ranking_store_time(username, delta_dsec, vel);
 			if (ret)
@@ -97,12 +103,12 @@ static int speed_sampling_thread(void *arg) {
 
 static int speed_open(struct inode *inode, struct file *file)
 {
-    return 0;
+	return 0;
 }
 
 static int speed_close(struct inode *inode, struct file *file)
 {
-    return 0;
+	return 0;
 }
 
 static ssize_t speed_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
@@ -127,7 +133,8 @@ static ssize_t speed_read(struct file *file, char __user *buf, size_t len, loff_
 }
 
 
-static ssize_t speed_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos) {
+static ssize_t speed_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos) 
+{
 	int err;
 	if (mutex_trylock(&dev_speed_mutex)) {
 		// Store the username
@@ -158,7 +165,8 @@ static ssize_t speed_write(struct file *file, const char __user *buf, size_t cou
 	return -1;
 }
 
-int dev_speed_create(unsigned int sensors_dist) {
+int dev_speed_create(unsigned int sensors_dist) 
+{
     	int ret;
     	struct kobject *kobj;
     	
@@ -240,8 +248,10 @@ exit0:
 	return ret;
 }
 
-void dev_speed_destroy(void) {
-	complete(&sample_available);	// if the thread was waiting for a sample, wake up it
+void dev_speed_destroy(void) 
+{
+	// if the thread was waiting for a sample, wake it up
+	complete(&sample_available);
 	kthread_stop(speed_sampling_thread_desc);
 	dev_ranking_destroy();
 	dev_pir_destroy();
@@ -251,18 +261,22 @@ void dev_speed_destroy(void) {
 	misc_deregister(&speed_device);
 }
 
-struct miscdevice* dev_speed_get_ptr(void) {
+struct miscdevice* dev_speed_get_ptr(void) 
+{
    	return &speed_device;
 }
 
 static struct file_operations speed_fops = {
-   	.owner =      	THIS_MODULE,
-    	.read =         	speed_read,
-	.write =		speed_write,
-    	.open =         	speed_open,
-    	.release =      	speed_close,
+   	.owner = 	THIS_MODULE,
+    	.read = 	speed_read,
+	.write =	speed_write,
+    	.open = 	speed_open,
+    	.release =	speed_close,
 };
 
 static struct miscdevice speed_device = {
-    	MISC_DYNAMIC_MINOR, "speed", &speed_fops
+    	MISC_DYNAMIC_MINOR, 
+	"speed", 
+	&speed_fops
 };
+
