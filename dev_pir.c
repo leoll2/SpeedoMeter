@@ -14,7 +14,6 @@ struct timespec t1, t2;
 static char last_irq_time_pir1[64];
 static char last_irq_time_pir2[64];
 struct completion sample_available;
-struct completion sample_consumed;
 
 unsigned int irq_pir1, irq_pir2;
 
@@ -138,8 +137,6 @@ int dev_pir_create(struct device *parent)
 	disable_irq(irq_pir2);
 
 	init_completion(&sample_available);
-	init_completion(&sample_consumed);
-	complete(&sample_consumed);
 
 	return 0;
 }
