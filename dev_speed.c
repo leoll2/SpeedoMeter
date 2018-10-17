@@ -1,3 +1,4 @@
+#include <linux/completion.h>
 #include <linux/interrupt.h>
 #include <linux/kthread.h>
 #include <linux/ktime.h>
@@ -16,7 +17,7 @@ static struct task_struct *speed_sampling_thread_desc;
 static char *username;
 static int username_len;
 static struct mutex username_mutex;
-static struct mutex dev_speed_mutex;
+static struct completion dev_speed_comp;
 unsigned int pir_dist;
 
 static ssize_t leaderboard_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) 
@@ -92,7 +93,7 @@ static int speed_sampling_thread(void *arg)
 			t2.tv_sec = 0;
 			kfree(username);
 			username = NULL;
-			mutex_unlock(&dev_speed_mutex);
+			complete(&dev_speed_comp);
 		}
 	}
 	enable_irq(irq_pir1);	// reenable IRQs as at the beginning
@@ -136,7 +137,7 @@ static ssize_t speed_read(struct file *file, char __user *buf, size_t len, loff_
 static ssize_t speed_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos) 
 {
 	int err;
-	if (mutex_trylock(&dev_speed_mutex)) {
+	if (try_wait_for_completion(&dev_speed_comp)) {
 		// Store the username
 		mutex_lock(&username_mutex);
 		if (username) {
@@ -216,7 +217,8 @@ int dev_speed_create(unsigned int sensors_dist)
 
 	/* Initialize semaphores */
 	mutex_init(&username_mutex);
-	mutex_init(&dev_speed_mutex);
+	init_completion(&dev_speed_comp);
+	complete(&dev_speed_comp);
 
 	/* Start the thread for processing samples */
 	speed_sampling_thread_desc = kthread_run(speed_sampling_thread, NULL, "speed sampling thread");
