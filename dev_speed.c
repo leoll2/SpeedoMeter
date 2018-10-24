@@ -115,6 +115,11 @@ static int speed_close(struct inode *inode, struct file *file)
 static ssize_t speed_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
 {
 	int err, read_bytes;
+	char temp[username_len+2]; 	// '\n' and '\0'
+	
+	if (*ppos != 0)
+		return 0;
+	
 	mutex_lock(&username_mutex);
 	if (username == NULL) {
 		mutex_unlock(&username_mutex);
@@ -124,12 +129,18 @@ static ssize_t speed_read(struct file *file, char __user *buf, size_t len, loff_
 		read_bytes = username_len;
 	else
 		read_bytes = len;
-	err = copy_to_user(buf, username, read_bytes);
+	
+	read_bytes = snprintf(temp, read_bytes + 1, "%s\n", username);
+	temp[read_bytes++] = '\0';
+		
+	err = copy_to_user(buf, temp, read_bytes);
 	if (err) {
 		mutex_unlock(&username_mutex);
 		return -EFAULT;
 	}
+	
 	mutex_unlock(&username_mutex);
+	*ppos += read_bytes;
 	return read_bytes;
 }
 
